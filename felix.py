@@ -4,23 +4,13 @@ sys.path.append(".")
 
 from lexer import Lexer
 from parse import Parser
-
-#CONSTANTS
-DIGITS = "01234566789"
-
-#TOKENS
-
-TT_INT		= 'INT'
-TT_FLOAT    = 'FLOAT'
-TT_PLUS     = 'PLUS'
-TT_MINUS    = 'MINUS'
-TT_MUL      = 'MUL'
-TT_DIV      = 'DIV'
-TT_LPAREN   = 'LPAREN'
-TT_RPAREN   = 'RPAREN'
-TT_EOF      = 'EOF'
+from interpreter import  Interpreter,Context,SymbolTable,Number
 
 
+global_symbol_table = SymbolTable()
+global_symbol_table.set("null", Number(0))
+global_symbol_table.set("FALSE", Number(0))
+global_symbol_table.set("TRUE", Number(1))
 
 
 
@@ -31,9 +21,13 @@ def run(fname,text):
     tokens,err = lexer.make_tokens()
     if err:return None,err
     
-    else:
-        parser=Parser(tokens)
-        ast=parser.parse()
-        
+    parser=Parser(tokens)
+    ast=parser.parse()
+    if ast.error: return None,ast.error
     
-    return ast.node,ast.error
+    interpreter = Interpreter()
+    context=Context('<program>')
+    context.symbol=global_symbol_table
+    result=interpreter.visit(ast.node,context)    
+    
+    return result.value,result.error

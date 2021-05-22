@@ -1,9 +1,12 @@
 import felix
 
+f= open("felix.txt","r")
+print(f.read())
+
 while(True):
     text=input("felix> ")
     if text=="exit":
-        print("Exiting Felix Terminal")
+        print("Exiting Felix Terminal!!!!")
         break
     result,err=felix.run('<stdin>',text)
     

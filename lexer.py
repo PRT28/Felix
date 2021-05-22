@@ -4,20 +4,7 @@ sys.path.append(".")
 
 from position import Position
 from error import IllegalCharError
-
-DIGITS = "01234566789"
-
-#TOKENS
-
-TT_INT		= 'INT'
-TT_FLOAT    = 'FLOAT'
-TT_PLUS     = 'PLUS'
-TT_MINUS    = 'MINUS'
-TT_MUL      = 'MUL'
-TT_DIV      = 'DIV'
-TT_LPAREN   = 'LPAREN'
-TT_RPAREN   = 'RPAREN'
-TT_EOF      = 'EOF'
+from constants import *
 
 class Token:
     def __init__(self,type_,val=None,start=None,end=None):
@@ -31,6 +18,9 @@ class Token:
             
         if end:
             self.end=end.cp()
+    
+    def match(self,t,v):
+        return self.type_==t and self.val==v 
         
     def __repr__(self):
         if self.val:
@@ -60,6 +50,8 @@ class Lexer:
                 self.advance()
             elif self.curr_char in DIGITS:
                 tokens.append(self.make_num())
+            elif self.curr_char in LETTERS:
+                tokens.append(self.make_id())
             elif self.curr_char == '+':
                 tokens.append(Token(TT_PLUS,start=self.pos))
                 self.advance()
@@ -72,12 +64,36 @@ class Lexer:
             elif self.curr_char == '/':
                 tokens.append(Token(TT_DIV,start=self.pos))
                 self.advance()
+            elif self.curr_char == '^':
+                tokens.append(Token(TT_POW,start=self.pos))
+                self.advance()
             elif self.curr_char == '(':
                 tokens.append(Token(TT_LPAREN,start=self.pos))
                 self.advance()
             elif self.curr_char == ')':
                 tokens.append(Token(TT_RPAREN,start=self.pos))
+            elif self.curr_char == '{':
+                tokens.append(Token(TT_LCURL,start=self.pos))
                 self.advance()
+            elif self.curr_char == '}':
+                tokens.append(Token(TT_RCURL,start=self.pos))
+                self.advance()
+            elif self.curr_char == ':':
+                tokens.append(Token(TT_COL,start=self.pos))
+                self.advance()
+            elif self.curr_char == ';':
+                tokens.append(Token(TT_SEMCOL,start=self.pos))
+                self.advance()
+            elif self.curr_char == '!':
+                token, err=self.make_not()
+                if err: return [],err
+                tokens.append(token)
+            elif self.curr_char == '=':
+                tokens.append(self.make_eq())
+            elif self.curr_char == '<':
+                tokens.append(self.less())
+            elif self.curr_char == '>':
+                tokens.append(self.great())
             else:
                 start=self.pos.cp()
                 char=self.curr_char
@@ -105,3 +121,58 @@ class Lexer:
             return Token(TT_FLOAT, float(num),start,self.pos)
         else:
             return Token(TT_INT, int(num),start,self.pos)
+        
+    def make_id(self):
+        id_str=''
+        start=self.pos.cp()
+        
+        while self.curr_char != None and self.curr_char in L_D + '_':
+            id_str+=self.curr_char
+            self.advance()
+            
+        token= TT_KEYWORD if id_str in KEYWORDS else TT_IDENTIFIER
+        return Token(token,id_str,start,self.pos)
+    def make_not(self):
+        start=self.pos.cp()
+        self.advance()
+        
+        if self.curr_char == "=":
+            self.advance()
+            return Token(TT_NE,start=start,end=self.pos),None
+        
+        return None,ExpectedCharErr(start,self.pos,"'=' after '!'")
+    
+    def make_eq(self):
+        token=TT_EQ
+        start=self.pos.cp()
+        self.advance()
+        
+        if self.curr_char == "=":
+            self.advance()
+            token=TT_EE
+            
+        return Token(token,start=start,end=self.pos)
+    
+    def less(self):
+        token=TT_LT
+        start=self.pos.cp()
+        self.advance()
+        
+        if self.curr_char == "=":
+            self.advance()
+            token=TT_LTE
+            
+        return Token(token,start=start,end=self.pos)
+    
+    def great(self):
+        token=TT_GT
+        start=self.pos.cp()
+        self.advance()
+        
+        if self.curr_char == "=":
+            self.advance()
+            token=TT_GTE
+            
+        return Token(token,start=start,end=self.pos)
+        
+        
