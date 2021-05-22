@@ -1,14 +1,14 @@
-import felix
+import taurus
 
-f= open("felix.txt","r")
+f= open("taurus.txt","r")
 print(f.read())
 
 while(True):
-    text=input("felix> ")
+    text=input("taurus> ")
     if text=="exit":
-        print("Exiting Felix Terminal!!!!")
+        print("Exiting Taurus Terminal!!!!")
         break
-    result,err=felix.run('<stdin>',text)
+    result,err=taurus.run('<stdin>',text)
     
     if err:print(err.error())
     else:print(result)
