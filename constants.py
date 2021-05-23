@@ -17,7 +17,8 @@ KEYWORDS=[
     'else',
     'ifel',
     'for',
-    'while'
+    'while',
+    'function'
     ]
 
 #TOKENS
@@ -45,3 +46,4 @@ TT_LCURL    = 'LCURL'
 TT_RCURL    = 'RCURL'
 TT_COL      = 'COL'
 TT_SEMCOL   = 'SEMCOL'
+TT_COM     = 'COM'

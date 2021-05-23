@@ -1,12 +1,87 @@
 from error import RTError
 from constants import *
 
+#Function Values
+
+class Value:
+	def __init__(self):
+		self.set_pos()
+		self.set_context()
+
+	def set_pos(self, start=None, end=None):
+		self.start = start
+		self.end = end
+		return self
+
+	def set_context(self, context=None):
+		self.context = context
+		return self
+
+	def add(self, other):
+		return None, self.illegal_operation(other)
+
+	def sub(self, other):
+		return None, self.illegal_operation(other)
+
+	def mul(self, other):
+		return None, self.illegal_operation(other)
+
+	def div(self, other):
+		return None, self.illegal_operation(other)
+
+	def power(self, other):
+		return None, self.illegal_operation(other)
+
+	def ee(self, other):
+		return None, self.illegal_operation(other)
+
+	def ne(self, other):
+		return None, self.illegal_operation(other)
+
+	def lt(self, other):
+		return None, self.illegal_operation(other)
+
+	def gt(self, other):
+		return None, self.illegal_operation(other)
+
+	def lte(self, other):
+		return None, self.illegal_operation(other)
+
+	def gte(self, other):
+		return None, self.illegal_operation(other)
+
+	def andd(self, other):
+		return None, self.illegal_operation(other)
+
+	def ore(self, other):
+		return None, self.illegal_operation(other)
+
+	def nott(self):
+		return None, self.illegal_operation(other)
+
+	def execute(self, args):
+		return RTResult().failure(self.illegal_operation())
+
+	def copy(self):
+		raise Exception('No copy method defined')
+
+	def is_true(self):
+		return False
+
+	def illegal_operation(self, other=None):
+		if not other: other = self
+		return RTError(
+			self.pos_start, other.pos_end,
+			'Illegal operation',
+			self.context
+		)
+
 # SYMBOL TABLE
 
 class SymbolTable:
-	def __init__(self):
+	def __init__(self, parent=None):
 		self.symbols = {}
-		self.parent = None
+		self.parent = parent
 
 	def get(self, name):
 		value = self.symbols.get(name, None)
@@ -51,36 +126,34 @@ class RTResult:
 
 #VALLUES
 
-class Number:
+class Number(Value):
     def __init__(self,value):
+        super().__init__()
         self.value=value
-        self.set_pos()
-        self.set_context()
-        
-    def set_pos(self,start=None,end=None):
-        self.start=start
-        self.end=end
-        return self
-    
-    def set_context(self, context=None):
-        self.context = context
-        return self
     
     def add(self,other):
         if isinstance(other, Number):
             return Number(self.value+other.value).set_context(self.context),None
+        else:
+            return None, Value.illegal_operation(self,other)
         
     def sub(self,other):
         if isinstance(other, Number):
             return Number(self.value-other.value).set_context(self.context),None
+        else:
+            return None, Value.illegal_operation(self,other)
         
     def mul(self,other):
         if isinstance(other, Number):
             return Number(self.value*other.value).set_context(self.context),None
+        else:
+            return None, Value.illegal_operation(self,other)
         
     def power(self,other):
         if isinstance(other, Number):
             return Number(self.value**other.value).set_context(self.context),None
+        else:
+            return None, Value.illegal_operation(self,other)
         
     def div(self,other):
         if isinstance(other, Number):
@@ -88,35 +161,53 @@ class Number:
                 return None,RTError(other.start,other.end,"Division by zero",self.context)
             else:
                 return Number(self.value/other.value).set_context(self.context),None
+        else:
+            return None, Value.illegal_operation(self,other)
             
     def ee(self,other):
         if isinstance(other, Number):
             return Number(int(self.value == other.value)).set_context(self.context),None
+        else:
+            return None, Value.illegal_operation(self,other)
     def ne(self,other):
         if isinstance(other, Number):
             return Number(int(self.value != other.value)).set_context(self.context),None
+        else:
+            return None, Value.illegal_operation(self,other)
     def lt(self,other):
         if isinstance(other, Number):
             return Number(int(self.value < other.value)).set_context(self.context),None
+        else:
+            return None, Value.illegal_operation(self,other)
     def lte(self,other):
         if isinstance(other, Number):
             return Number(int(self.value <= other.value)).set_context(self.context),None
+        else:
+            return None, Value.illegal_operation(self,other)
     def gt(self,other):
         if isinstance(other, Number):
             return Number(int(self.value > other.value)).set_context(self.context),None
+        else:
+            return None, Value.illegal_operation(self,other)
     def gte(self,other):
         if isinstance(other, Number):
             return Number(int(self.value >= other.value)).set_context(self.context),None
+        else:
+            return None, Value.illegal_operation(self,other)
     def andd(self,other):
         if isinstance(other, Number):
             return Number(int(self.value and other.value)).set_context(self.context),None
+        else:
+            return None, Value.illegal_operation(self,other)
     def orr(self,other):
         if isinstance(other, Number):
             return Number(int(self.value or other.value)).set_context(self.context),None
+        else:
+            return None, Value.illegal_operation(self,other)
     def nott(self):
         return Number(1 if self.value == 0 else 0).set_context(self.context), None
             
-    def copy(self):
+    def cp(self):
         copy = Number(self.value)
         copy.set_pos(self.start, self.end)
         copy.set_context(self.context)
@@ -128,7 +219,45 @@ class Number:
     def __repr__(self):
         return str(self.value)
 
+#FUNCTION CLASS
 
+class Function(Value):
+    def __init__(self,name,body,args):
+        super().__init__()
+        self.name=name or "<anonymous>"
+        self.body=body
+        self.args=args
+        
+    def execute(self,args):
+        res=RTResult()
+        interpreter=Interpreter()
+        new_cont=Context(self.name,self.context,self.start)
+        new_cont.symbol= SymbolTable(new_cont.parent.symbol)
+        
+        if len(args)>len(self.args):
+            return res.failure(RTError(self.start,self.end,f"{len(args) - len(self.args)} too many args passed into '{self.name}'"),self.context)
+
+        if len(args)<len(self.args):
+            return res.failure(RTError(self.start,self.end,f"{len(args) - len(self.args)} too few args passed into '{self.name}'"),self.context)
+        
+        for i in range(len(args)):
+            arg=self.args[i]
+            arg_val=args[i]
+            arg_val.set_context(new_cont)
+            new_cont.symbol.set(arg,arg_val)
+            
+        value= res.register(interpreter.visit(self.body,new_cont))
+        if res.error: return res
+        return res.success(value)
+    
+    def cp(self):
+        copy= Function(self.name, self.body, self.args)
+        copy.set_context(self.context)
+        copy.set_pos(self.start,self.end)
+        return copy
+    
+    def __repr__(self):
+        return f"<function {self.name}>"
 
 #INTERPRETER
 
@@ -153,7 +282,7 @@ class Interpreter:
 				context
 			))
 
-        value = value.copy().set_pos(node.start, node.end)
+        value = value.cp().set_pos(node.start, node.end)
         return res.success(value)
 
     def visit_VarAsNode(self, node, context):
@@ -286,4 +415,37 @@ class Interpreter:
             if res.error: return res
             
         return res.success(None)
+    
+    def visit_FunctionNode(self,node,context):
+        res=RTResult()
+        
+        name=node.name.val if node.name else None
+        body=node.body
+        args= [arg.val for arg in node.args]
+        value = Function(name, body, args).set_context(context).set_pos(node.start, node.end)
+        
+        if node.name:
+            context.symbol.set(name,value)
+            
+        return res.success(value)
+    
+    def visit_CallNode(self,node,context):
+        res=RTResult()
+        args=[]
+        
+        val_cal= res.register(self.visit(node.call_node, context))
+        if res.error: return res
+        val_cal= val_cal.cp().set_pos(node.start, node.end)
+        
+        for arg in node.args:
+            args.append(res.register(self.visit(arg, context)))
+            if res.error: return res
+            
+        return_val= res.register(val_cal.execute(args))
+        if res.error: return res
+        return res.success(return_val)
+    
+    
+    
+    
         

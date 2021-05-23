@@ -53,6 +53,31 @@ class WhileNode:
         self.body=body
         self.start=self.condition.start
         self.end=self.body.end
+        
+class FunctionNode:
+    def __init__(self,name,args,body):
+        self.name=name
+        self.args=args
+        self.body=body
+        self.start=self.name.start
+        if self.name:
+            self.start=self.name.start
+        elif len(self.args)>0:
+            self.start=self.args[0].start
+        else:
+            self.start=self.body.start
+            
+        self.end=self.body.end
+        
+class CallNode:
+    def __init__(self,call_node,args):
+        self.call_node=call_node
+        self.args=args
+        self.start=call_node.start
+        if len(self.args)>0:
+            self.end=self.args[len(self.args)-1].end
+        else:
+            self.end=self.call_node.end
     
 class BinaryOP:
     def __init__(self,left,op,right):
@@ -124,6 +149,40 @@ class Parser:
 				"Expected '+', '-', '*' or '/'"
 			))
         return res
+    
+    def call(self):
+            res=ParseResult()
+            atom=res.register(self.atom())
+            if res.error: return res
+            
+            if self.curr_token.type_ == TT_LPAREN:
+                res.register_advancement()
+                self.advance()
+                args=[]
+                
+                if self.curr_token.type_ == TT_RPAREN:
+                    res.register_advancement()
+                    self.advance()
+                    
+                else:
+                    args.append(res.register(self.expr()))
+                    if res.error:
+                        return res.failure(InvalidSyntaxError(self.curr_token.start, self.curr_token.end,"Expected 'VAR', int, float, identifier, '+', '-' or ')'"))
+                    
+                    while self.curr_token.type_ == TT_COM:
+                        res.register_advancement()
+                        self.advance()
+                        args.append(res.register(self.expr()))
+                        if res.error: return res
+                      
+                    if self.curr_token.type_ != TT_RPAREN:
+                        return res.failure(InvalidSyntaxError(self.curr_token.start, self.curr_token.end,"Expected ',' or ')'"))
+        
+                    res.register_advancement()
+                    self.advance()
+                    
+                return res.success(CallNode(atom, args))
+            return res.success(atom)
     
     def if_expr(self):
         res=ParseResult()
@@ -305,7 +364,7 @@ class Parser:
                 return res.success(expr)
             else:
                 return res.failure(InvalidSyntaxError(
-					self.curr_token.start, self.curr_tokentok.end,
+					self.curr_token.start, self.curr_token.end,
 					"Expected ')'"
 				))
             
@@ -323,6 +382,11 @@ class Parser:
             while_expr=res.register(self.while_expr())
             if res.error: return res
             return res.success(while_expr)
+        
+        elif token.match(TT_KEYWORD,'function'):
+            func=res.register(self.func_def())
+            if res.error: return res
+            return res.success(func)
         
         return res.failure(InvalidSyntaxError(
 			token.start, token.end,
@@ -353,7 +417,7 @@ class Parser:
         return self.bIN(self.term, (TT_PLUS,TT_MINUS))
     
     def power(self):
-        return self.bIN(self.atom, (TT_POW, ), self.factor)
+        return self.bIN(self.call, (TT_POW, ), self.factor)
     
     def factor(self):
         res=ParseResult()
@@ -430,3 +494,82 @@ class Parser:
             left=BinaryOP(left, o, right)
         
         return res.success(left)
+    
+    def func_def(self):
+        res=ParseResult()
+        if not self.curr_token.match(TT_KEYWORD,'function'):
+            return res.failure(InvalidSyntaxError(self.curr_token.start, self.curr_token.end,"Expected 'function'"))
+        
+        
+        res.register_advancement()
+        self.advance()
+        
+        if self.curr_token.type_ == TT_IDENTIFIER:
+            var_name=self.curr_token
+            res.register_advancement()
+            self.advance()
+            if self.curr_token.type_ != TT_LPAREN:
+                return res.failure(InvalidSyntaxError(self.curr_token.start, self.curr_token.end,"Expected '('"))
+            
+        else:
+            var_name=None
+            if self.curr_token.type_ != TT_LPAREN:
+                return res.failure(InvalidSyntaxError(self.curr_token.start, self.curr_token.end,"Expected '('"))
+            
+        res.register_advancement()
+        self.advance()
+        args=[]
+        
+        if self.curr_token.type_ == TT_IDENTIFIER:
+            args.append(self.curr_token)
+            res.register_advancement()
+            self.advance()
+            
+            while self.curr_token.type_ == TT_COM:
+                res.register_advancement()
+                self.advance()
+                
+                if self.curr_token.type_ != TT_IDENTIFIER:
+                    return res.failure(InvalidSyntaxError(self.curr_token.start, self.curr_token.end,"Expected 'identifier'"))
+                
+                args.append(self.curr_token)
+                res.register_advancement()
+                self.advance()
+                
+            if self.curr_token.type_ != TT_RPAREN:
+                return res.failure(InvalidSyntaxError(self.curr_token.start, self.curr_token.end,"Expected ',' or ')'"))
+            
+        else:
+            if self.curr_token.type_ != TT_RPAREN:
+                return res.failure(InvalidSyntaxError(self.curr_token.start, self.curr_token.end,"Expected ')'"))
+            
+        res.register_advancement()
+        self.advance()
+            
+        if not self.curr_token.type_==TT_LCURL:
+                return res.failure(InvalidSyntaxError(self.curr_token.start, self.curr_token.end,"Expected '{'"))
+            
+        res.register_advancement()
+        self.advance()
+        node_ret=res.register(self.expr())
+        if res.error: return res
+        
+        if not self.curr_token.type_==TT_RCURL:
+                return res.failure(InvalidSyntaxError(self.curr_token.start, self.curr_token.end,"Expected '}'"))
+            
+        res.register_advancement()
+        self.advance()
+        
+        return res.success(FunctionNode(var_name, args, node_ret))
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        

@@ -1,6 +1,6 @@
 import taurus
 
-f= open("taurus.txt","r")
+f=open("taurus.txt","r")
 print(f.read())
 
 while(True):

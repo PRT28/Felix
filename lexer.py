@@ -72,6 +72,7 @@ class Lexer:
                 self.advance()
             elif self.curr_char == ')':
                 tokens.append(Token(TT_RPAREN,start=self.pos))
+                self.advance()
             elif self.curr_char == '{':
                 tokens.append(Token(TT_LCURL,start=self.pos))
                 self.advance()
@@ -83,6 +84,9 @@ class Lexer:
                 self.advance()
             elif self.curr_char == ';':
                 tokens.append(Token(TT_SEMCOL,start=self.pos))
+                self.advance()
+            elif self.curr_char == ',':
+                tokens.append(Token(TT_COM,start=self.pos))
                 self.advance()
             elif self.curr_char == '!':
                 token, err=self.make_not()
