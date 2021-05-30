@@ -16,6 +16,21 @@ class NumberNode:
         
     def __repr__(self):
         return f'{self.token}'
+    
+class StringNode:
+    def __init__(self,token):
+        self.token=token
+        self.start=self.token.start
+        self.end=self.token.end
+        
+    def __repr__(self):
+        return f'{self.token}'
+    
+class ListNode:
+    def __init__(self,elements,start,end):
+        self.elements=elements
+        self.start=start
+        self.end=end
 
 class VarAccNode:
     def __init__(self,token):
@@ -243,7 +258,7 @@ class Parser:
             else_case=res.register(self.expr)
             if res.error: return res
             
-            if not self.curr_token.typr_==TT_RCURL:
+            if not self.curr_token.type_==TT_RCURL:
                 return res.failure(InvalidSyntaxError(self.curr_token.start, self.curr_token.end,"Expected '}'"))
             
             res.register_advancement()
@@ -348,10 +363,20 @@ class Parser:
             self.advance()
             return res.success(NumberNode(token))
         
+        elif token.type_ == TT_STRING:
+            res.register_advancement()
+            self.advance()
+            return res.success(StringNode(token))
+        
         elif token.type_ == TT_IDENTIFIER:
             res.register_advancement()
             self.advance()
             return res.success(VarAccNode(token))
+        
+        elif token.type_ == TT_LSQ:
+            li=res.register(self.li())
+            if res.error: return res
+            return res.success(li)
         
         elif token.type_ == TT_LPAREN:
             res.register_advancement()
@@ -563,13 +588,39 @@ class Parser:
         return res.success(FunctionNode(var_name, args, node_ret))
         
         
+    def li(self):
+        res=ParseResult()
+        elements=[]
+        start=self.curr_token.start.cp()
         
+        if self.curr_token.type_ != TT_LSQ:
+            res.failure(InvalidSyntaxError(self.curr_token.start, self.curr_token.end,"Expected '['"))
+            
+        res.register_advancement()
+        self.advance()
         
-        
-        
-        
-        
-        
-        
-        
-        
+        if self.curr_token.type_ == TT_RSQ:
+            res.register_advancement()
+            self.advance()
+            
+        else:
+            elements.append(res.register(self.expr()))
+            if res.error:
+                return res.failure(InvalidSyntaxError(self.curr_token.start, self.curr_token.end,"Expected ']', 'var', 'if', 'for', 'while', 'function', int, float, identifier, '+', '-', '(', '[' or 'not'"))
+            
+            while self.curr_token.type_ == TT_COM:
+                res.register_advancement()
+                self.advance()
+                
+                elements.append(res.register(self.expr()))
+                if res.error: return res
+                
+            if res.error:
+                return res.failure(InvalidSyntaxError(self.curr_token.start, self.curr_token.end,"Expected ',' or ']'"))
+                
+            res.register_advancement()
+            self.advance()
+
+        return res.success(ListNode(elements, start, self.curr_token.end.cp()))
+
+

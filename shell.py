@@ -11,6 +11,6 @@ while(True):
     result,err=taurus.run('<stdin>',text)
     
     if err:print(err.error())
-    else:print(result)
+    else:print(repr(result))
     
     

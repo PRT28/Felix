@@ -52,6 +52,8 @@ class Lexer:
                 tokens.append(self.make_num())
             elif self.curr_char in LETTERS:
                 tokens.append(self.make_id())
+            elif self.curr_char == '"':
+                tokens.append(self.make_string())
             elif self.curr_char == '+':
                 tokens.append(Token(TT_PLUS,start=self.pos))
                 self.advance()
@@ -72,6 +74,12 @@ class Lexer:
                 self.advance()
             elif self.curr_char == ')':
                 tokens.append(Token(TT_RPAREN,start=self.pos))
+                self.advance()
+            elif self.curr_char == '[':
+                tokens.append(Token(TT_LSQ,start=self.pos))
+                self.advance()
+            elif self.curr_char == ']':
+                tokens.append(Token(TT_RSQ,start=self.pos))
                 self.advance()
             elif self.curr_char == '{':
                 tokens.append(Token(TT_LCURL,start=self.pos))
@@ -126,6 +134,28 @@ class Lexer:
         else:
             return Token(TT_INT, int(num),start,self.pos)
         
+    def make_string(self):
+        string=''
+        start=self.pos.cp()
+        esc_char=False
+        self.advance()
+        esc={'n':'\n','t':'\t'}
+        
+        while self.curr_char != None and (self.curr_char != '"' or esc_char):
+            if esc_char:
+                string += esc.get(self.curr_char, self.curr_char)
+            else:
+                if self.curr_char == '\\':
+                    esc_char = True
+                else:
+                    string += self.curr_char
+                
+            self.advance()
+            esc_char = False
+            
+        self.advance()
+        return Token(TT_STRING, string,start,self.pos)
+        
     def make_id(self):
         id_str=''
         start=self.pos.cp()
@@ -178,5 +208,6 @@ class Lexer:
             token=TT_GTE
             
         return Token(token,start=start,end=self.pos)
+    
         
         

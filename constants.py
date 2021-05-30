@@ -1,10 +1,29 @@
 import string
+from interpreter import Number,BuiltIn
 
 #CONSTANTS
 
 DIGITS = "01234566789"
 LETTERS = string.ascii_letters
 L_D=LETTERS+DIGITS
+
+
+Number.null = Number(0)
+Number.false = Number(0)
+Number.true = Number(1)
+
+BuiltIn.print       = BuiltIn("print")
+BuiltIn.print_ret   = BuiltIn("print_ret")
+BuiltIn.input       = BuiltIn("input")
+BuiltIn.input_int   = BuiltIn("input_int")
+BuiltIn.clear       = BuiltIn("clear")
+BuiltIn.is_number   = BuiltIn("is_number")
+BuiltIn.is_string   = BuiltIn("is_string")
+BuiltIn.is_list     = BuiltIn("is_list")
+BuiltIn.is_function = BuiltIn("is_function")
+BuiltIn.append      = BuiltIn("append")
+BuiltIn.pop         = BuiltIn("pop")
+BuiltIn.extend      = BuiltIn("extend")
 
 #KEYWORDS
 
@@ -47,3 +66,6 @@ TT_RCURL    = 'RCURL'
 TT_COL      = 'COL'
 TT_SEMCOL   = 'SEMCOL'
 TT_COM     = 'COM'
+TT_STRING = 'STRING'
+TT_LSQ = 'LSQ'
+TT_RSQ = 'RSQ'
