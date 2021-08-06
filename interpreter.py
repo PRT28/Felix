@@ -1,6 +1,11 @@
 from error import RTError
 from constants import *
 import os
+from lexer import Lexer
+from parse import Parser
+
+
+
 
 TT_INT		= 'INT'
 TT_FLOAT    = 'FLOAT'
@@ -24,11 +29,11 @@ TT_GTE      = 'GTE'
 TT_LCURL    = 'LCURL'
 TT_RCURL    = 'RCURL'
 TT_COL      = 'COL'
-TT_SEMCOL   = 'SEMCOL'
 TT_COM     = 'COM'
 TT_STRING = 'STRING'
 TT_LSQ = 'LSQ'
 TT_RSQ = 'RSQ'
+TT_SEMCOL= 'SEMCOL'
 
 #Function Values
 
@@ -85,7 +90,7 @@ class Value:
 	def ore(self, other):
 		return None, self.illegal_operation(other)
 
-	def nott(self):
+	def nott(self, other):
 		return None, self.illegal_operation(other)
 
 	def execute(self, args):
@@ -137,20 +142,53 @@ class Context:
 
 class RTResult:
 	def __init__(self):
+         self.reset()
+            
+	def reset(self):
 		self.value = None
 		self.error = None
+		self.func_ret_val=None
+		self.loop_continue=False
+		self.loop_break=False
 
+    
 	def register(self, res):
-		if res.error: self.error = res.error
+		self.error = res.error
+		self.func_ret_val=res.func_ret_val
+		self.loop_continue=res.loop_continue
+		self.loop_break=res.loop_break
 		return res.value
 
 	def success(self, value):
+		self.reset()
 		self.value = value
+		return self
+    
+	def success_return(self, value):
+		self.reset()
+		self.func_ret_val = value
+		return self
+      
+	def success_continue(self):
+		self.reset()
+		self.loop_continue = True
+		return self
+    
+	def success_break(self):
+		self.reset()
+		self.loop_break = True
 		return self
 
 	def failure(self, error):
+		self.reset()
 		self.error = error
 		return self
+    
+	def should_return(self):
+		return(self.error or
+      self.func_ret_val or
+      self.loop_continue or
+      self.loop_break)
 
 
 #VALLUES
@@ -280,15 +318,16 @@ class BaseFunc(Value):
     def check_and_populate_args(self,arg_names,args,cont):
         res=RTResult()
         res.register(self.check_args(arg_names, args))
-        if res.error: return res
+        if res.should_return(): return res
         self.populate_args(arg_names, args, cont)
         return res.success(None)
 
 class Function(BaseFunc):
-    def __init__(self,name,body,arg_names):
+    def __init__(self,name,body,arg_names, ret):
         super().__init__(name)
         self.body=body
         self.arg_names=arg_names
+        self.ret=ret
         
     def execute(self,args):
         res=RTResult()
@@ -296,14 +335,15 @@ class Function(BaseFunc):
         new_cont=self.gen_new_cont()
         
         res.register(self.check_and_populate_args(self.arg_names,args,new_cont))
-        if res.error: return res
+        if res.should_return(): return res
             
         value= res.register(interpreter.visit(self.body,new_cont))
-        if res.error: return res
-        return res.success(value)
+        if res.should_return() and res.func_ret_val==None: return res
+        ret_value = (value if self.ret else None) or res.func_ret_val or Number.null
+        return res.success(ret_value)
     
     def cp(self):
-        copy= Function(self.name, self.body, self.arg_names)
+        copy= Function(self.name, self.body, self.arg_names, self.ret)
         copy.set_context(self.context)
         copy.set_pos(self.start,self.end)
         return copy
@@ -326,9 +366,9 @@ class BuiltIn(BaseFunc):
         method_name=f'execute_{self.name}'
         method=getattr(self, method_name, self.no_visit_method)
         res.register(self.check_and_populate_args(method.arg_names, args, new_cont))
-        if res.error: return res
+        if res.should_return(): return res
         return_value = res.register(method(new_cont))
-        if res.error: return res
+        if res.should_return(): return res
         return res.success(return_value)
     
     def no_visit_method(self):
@@ -458,6 +498,54 @@ class BuiltIn(BaseFunc):
         listA.elements.extend(listB.elements)
         return RTResult().success(Number.null)
     execute_extend.arg_names = ["listA", "listB"]
+    
+    def execute_len(self,exec_ctx):
+        list_ = exec_ctx.symbol.get("list")
+        
+        if not isinstance(list_, List):
+            return RTResult().failure(RTError(
+        self.start, self.end,
+        "Argument must be list",
+        exec_ctx
+      ))
+        return RTResult().success(Number(len(list_.elements)))
+    execute_len.arg_names = ["list"]
+        
+    
+    def execute_run(self, exec_ctx):
+        fn = exec_ctx.symbol.get("fn")
+    
+        if not isinstance(fn, String):
+          return RTResult().failure(RTError(
+            self.start, self.end,
+            "Second argument must be string",
+            exec_ctx
+          ))
+    
+        fn = fn.value
+    
+        try:
+          with open(fn, "r") as f:
+            script = f.read()
+        except Exception as e:
+          return RTResult().failure(RTError(
+            self.start, self.end,
+            f"Failed to load script \"{fn}\"\n" + str(e),
+            exec_ctx
+          ))
+    
+        _, error = run(fn, script)
+        
+        if error:
+          return RTResult().failure(RTError(
+            self.start, self.end,
+            f"Failed to finish executing script \"{fn}\"\n" +
+            error.as_string(),
+            exec_ctx
+          ))
+    
+        return RTResult().success(Number.null)
+    execute_run.arg_names = ["fn"]
 
 BuiltIn.print       = BuiltIn("print")
 BuiltIn.print_ret   = BuiltIn("print_ret")
@@ -471,6 +559,28 @@ BuiltIn.is_function = BuiltIn("is_function")
 BuiltIn.append      = BuiltIn("append")
 BuiltIn.pop         = BuiltIn("pop")
 BuiltIn.extend      = BuiltIn("extend")
+BuiltIn.len         = BuiltIn("len")
+BuiltIn.run         = BuiltIn("run")
+
+global_symbol_table = SymbolTable()
+global_symbol_table.set("null", Number.null)
+global_symbol_table.set("FALSE", Number.false)
+global_symbol_table.set("TRUE", Number.true)
+global_symbol_table.set("print", BuiltIn.print)
+global_symbol_table.set("print_r", BuiltIn.print_ret)
+global_symbol_table.set("input", BuiltIn.input)
+global_symbol_table.set("input_int", BuiltIn.input_int)
+global_symbol_table.set("clear", BuiltIn.clear)
+global_symbol_table.set("cls", BuiltIn.clear)
+global_symbol_table.set("is_num", BuiltIn.is_number)
+global_symbol_table.set("is_str", BuiltIn.is_string)
+global_symbol_table.set("is_list", BuiltIn.is_list)
+global_symbol_table.set("is_func", BuiltIn.is_function)
+global_symbol_table.set("append", BuiltIn.append)
+global_symbol_table.set("pop", BuiltIn.pop)
+global_symbol_table.set("extend", BuiltIn.extend)
+global_symbol_table.set("len", BuiltIn.len)
+global_symbol_table.set("run", BuiltIn.run)
     
 class String(Value):
     def __init__(self,value):
@@ -581,7 +691,7 @@ class Interpreter:
         res = RTResult()
         var_name = node.name.val
         value = res.register(self.visit(node.exp, context))
-        if res.error: return res
+        if res.should_return(): return res
 
         context.symbol.set(var_name, value)
         return res.success(value)
@@ -595,9 +705,9 @@ class Interpreter:
     def visit_BinaryOP(self,node,context):
         res = RTResult()
         left=res.register(self.visit(node.left,context))
-        if res.error: return res
+        if res.should_return(): return res
         right=res.register(self.visit(node.right,context))
-        if res.error: return res
+        if res.should_return(): return res
         result=Number(None)
         
         if node.op.type_ == TT_PLUS:
@@ -635,7 +745,7 @@ class Interpreter:
     def visit_UnaryOP(self,node,context):
         res=RTResult()
         num=res.register(self.visit(node.node,context))
-        if res.error: return res
+        if res.should_return(): return res
         
         error=None
         
@@ -651,35 +761,36 @@ class Interpreter:
     def visit_IfNode(self,node,context):
         res=RTResult()
         
-        for cond,expr in node.cases:
+        for cond,expr,ret_null in node.cases:
             cond_val= res.register(self.visit(cond, context))
-            if res.error : return res
+            if res.should_return() : return res
             
             if cond_val.is_true():
                 expr_val= res.register(self.visit(expr, context))
-                if res.error: return res
-                return res.success(expr_val)
+                if res.should_return(): return res
+                return res.success(Number.null if ret_null else expr_val)
             
             if node.else_case:
-                else_val=res.register(self.visit(node.else_case,context))
-                if res.error: return res
-                return res.success(else_val)
+                expr, ret_null=node.else_case
+                else_val=res.register(self.visit(expr,context))
+                if res.should_return(): return res
+                return res.success(Number.null if ret_null else else_val)
             
-            return res.success(None)
+            return res.success(Number.null)
         
     def visit_ForNode(self,node,context):
         res=RTResult()
         li=[]
         
-        start_val=res.register(self.visit(node.start_val, context))
-        if res.error: return res
+        start_val=res.register(self.visit(node.start, context))
+        if res.should_return(): return res
         
         end_val=res.register(self.visit(node.end_val,context))
-        if res.error: return res
+        if res.should_return(): return res
         
         if node.step:
             step=res.register(self.visit(node.step, context))
-            if res.error: return res
+            if res.should_return(): return res
         else:
             step=Number(1)
         
@@ -693,10 +804,13 @@ class Interpreter:
             context.symbol.set(node.name.val,Number(i))
             i += step.value
             
-            li.append(res.register(self.visit(node.body, context)))
-            if res.error: return res
+            value= res.register(self.visit(node.body, context))
+            if res.should_return() and res.loop_continue == False and res.loop_break == False: return res
+            if res.loop_continue: continue
+            if res.loop_break: break
+            li.append(value)
             
-        return res.success(List(li).set_context(context).set_pos(node.start,node.end))
+        return res.success(Number.null if node.ret_null else List(li).set_context(context).set_pos(node.start,node.end))
     
     def visit_WhileNode(self,node,context):
         res=RTResult()
@@ -704,14 +818,17 @@ class Interpreter:
         
         while True:
             condition=res.register(self.visit(node.condition, context))
-            if res.error: return res
+            if res.should_return(): return res
             
             if not condition.is_true(): break
             
-            li.append(res.register(self.visit(node.body, context)))
-            if res.error: return res
+            value=res.register(self.visit(node.body, context))
+            if res.should_return() and res.loop_continue == False and res.loop_break == False: return res
+            if res.loop_continue: continue
+            if res.loop_break: break
+            li.append(value)
             
-        return res.success(List(li).set_context(context).set_pos(node.start,node.end))
+        return res.success(Number.null if node.ret_null else List(li).set_context(context).set_pos(node.start,node.end))
     
     def visit_FunctionNode(self,node,context):
         res=RTResult()
@@ -719,7 +836,7 @@ class Interpreter:
         name=node.name.val if node.name else None
         body=node.body
         args= [arg.val for arg in node.args]
-        value = Function(name, body, args).set_context(context).set_pos(node.start, node.end)
+        value = Function(name, body, args, node.ret).set_context(context).set_pos(node.start, node.end)
         
         if node.name:
             context.symbol.set(name,value)
@@ -731,15 +848,15 @@ class Interpreter:
         args=[]
         
         val_cal= res.register(self.visit(node.call_node, context))
-        if res.error: return res
+        if res.should_return(): return res
         val_cal= val_cal.cp().set_pos(node.start, node.end)
         
         for arg in node.args:
             args.append(res.register(self.visit(arg, context)))
-            if res.error: return res
+            if res.should_return(): return res
             
         return_val= res.register(val_cal.execute(args))
-        if res.error: return res
+        if res.should_return(): return res
         return_val = return_val.cp().set_pos(node.start, node.end).set_context(context)
         return res.success(return_val)
     
@@ -749,9 +866,42 @@ class Interpreter:
         
         for e in node.elements:
             el.append(res.register(self.visit(e,context)))
-            if res.error: return res
+            if res.should_return(): return res
             
         return res.success(List(el).set_context(context).set_pos(node.start,node.end))
+    
+    def visit_ReturnNode(self,node,context):
+        res=RTResult()
+        
+        if node.node_to_return:
+            value = res.register(self.visit(node.node_to_return, context))
+            if res.should_return(): return res
+        else:
+            value=Number.null
+            
+        return res.success_return(value)
+    
+    def visit_ContinueNode(self, node, context):
+        return RTResult().success_continue()
+    
+    def visit_BreakNode(self, node, context):
+        return RTResult().success_break()
+    
+def run(fname,text):
+    lexer=Lexer(fname,text)
+    tokens,err = lexer.make_tokens()
+    if err:return None,err
+    
+    parser=Parser(tokens)
+    ast=parser.parse()
+    if ast.error: return None,ast.error
+    
+    interpreter = Interpreter()
+    context=Context('<program>')
+    context.symbol=global_symbol_table
+    result=interpreter.visit(ast.node,context)    
+    
+    return result.value,result.error
     
     
         

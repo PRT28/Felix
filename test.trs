@@ -1,0 +1,12 @@
+;var a=0
+;var b=1
+;var n=10
+;var i=0
+;print(a)
+;print(b)
+;while(i<n){
+    ;var c=a+b
+    ;var b=c
+    ;var a=b
+    ;var i=i+1
+    ;print(c)}

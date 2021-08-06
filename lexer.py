@@ -89,12 +89,14 @@ class Lexer:
                 self.advance()
             elif self.curr_char == ':':
                 tokens.append(Token(TT_COL,start=self.pos))
-                self.advance()
-            elif self.curr_char == ';':
+            elif self.curr_char == '.':
                 tokens.append(Token(TT_SEMCOL,start=self.pos))
                 self.advance()
             elif self.curr_char == ',':
                 tokens.append(Token(TT_COM,start=self.pos))
+                self.advance()
+            elif self.curr_char in ';\n':
+                tokens.append(Token(TT_NL,start=self.pos))
                 self.advance()
             elif self.curr_char == '!':
                 token, err=self.make_not()
